@@ -1,0 +1,12 @@
+matplotlib
+cartopy
+numpy
+pandas
+xarray
+scipy
+netcdf4
+h5netcdf
+dask
+# xarray-extras
+# ipython
+# jupyterlab
