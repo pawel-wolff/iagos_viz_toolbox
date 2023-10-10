@@ -227,7 +227,7 @@ def plot_profiles(fig, ds, facet_dim, multiline_dim, specie, v_ranges, h_ranges,
                     )
 
         ax2.tick_params(axis='x', which='both', labelsize=5)
-        ax2.set(xlim=(0.9, ds[f'{specie}_flights'].max().values))
+        ax2.set(xlim=(0.9, max(ds[f'{specie}_flights'].max().values, 10)))
         if col == 0:
             ax2.set_ylabel('profiles', fontsize=6)
         ax2.barh(
