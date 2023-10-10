@@ -5,11 +5,11 @@ import xarray_extras  # noq
 
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+import matplotlib.gridspec as gridspec
+
 import cartopy.feature as cf
 import cartopy.crs as ccrs
-# import cartopy.util as cutil
 import cartopy.mpl.ticker as cticker
-# from cartopy.util import add_cyclic_point
 
 
 LON = 'lon'
@@ -41,7 +41,7 @@ def plot_data_cube(
         orient='column',
         subplots=None,
         color=(None, 'blue'),
-        linestyle=(None, 'solid'),
+        linestyle=(None, ('solid', ',')),
         xmin=None, xmax=None,
         ymin=None, ymax=None,
         figsize=(10.7, 7.3),
@@ -123,16 +123,17 @@ def plot_data_cube(
             dss_for_colors = [ds_for_facet]
 
         for ds_for_color, c in zip(dss_for_colors, colors):
-            linestyle_dim, linestyles = linestyle
-            if not isinstance(linestyles, (list, tuple)):
-                linestyles = [linestyles]
+            linestyle_dim, linestyles_and_markers = linestyle
+            if linestyle_dim is None:
+                linestyles_and_markers = [linestyles_and_markers]
             if linestyle_dim is not None:
                 dss = [ds_for_color.sel({linestyle_dim: linestyle_coord}) for linestyle_coord in ds[linestyle_dim].values]
             else:
                 dss = [ds_for_color]
 
-            for _ds, ls in zip(dss, linestyles):
-                _line, = ax.plot(_ds['x'].values, _ds['y'].values, linestyle=ls, linewidth=linewidth, color=c)
+            for _ds, (ls, marker) in zip(dss, linestyles_and_markers):
+                print(type(ax))
+                _line, = ax.plot(_ds['x'].values, _ds['y'].values, linestyle=ls, linewidth=linewidth, marker=marker, color=c)
                 _record = {}
                 if subplots is not None:
                     _record[subplots] = facet_coord
@@ -145,6 +146,177 @@ def plot_data_cube(
 
     plt.suptitle(title)
     return fig, pd.DataFrame.from_dict(line_df)
+
+
+def _hide_axes_ticks_and_labels(ax, axes='xy'):
+    assert axes in ['x', 'y', 'xy']
+    for axis in ['x', 'y']:
+        if axis in axes:
+            ax.tick_params(
+                axis=axis,  # changes apply to the x-axis
+                which='both',  # both major and minor ticks are affected
+                bottom=False,  # ticks along the bottom edge are off
+                top=False,  # ticks along the top edge are off
+                labelbottom=False,  # labels along the bottom edge are off
+                left=False,
+                labelleft=False,
+            )
+
+
+def plot_monthly_profiles(fig, ds, specie, v_ranges, h_ranges, grid_spans):
+    assert len(v_ranges) == len(h_ranges) == len(grid_spans) - 1
+    grid_spans = np.concatenate([[0], np.asarray(grid_spans)])
+    grid_spans_start, grid_spans_stop = np.cumsum(grid_spans)[:-1], np.cumsum(grid_spans)[1:]
+    grid_spans_slice = [slice(start, stop) for start, stop in zip(grid_spans_start, grid_spans_stop)]
+
+    gs = gridspec.GridSpec(2, 6, hspace=0.3, figure=fig)
+    legend_items = []
+
+    for i, (month, ds_month) in enumerate(ds.xrx.iterate('month')):
+        row = i // 6
+        col = i % 6
+        gs_month = gridspec.GridSpecFromSubplotSpec(nrows=np.sum(grid_spans), ncols=1, subplot_spec=gs[row, col])
+        axs = [
+            fig.add_subplot(gs_month[grid_span_slice, 0])
+            for grid_span_slice in grid_spans_slice
+        ]
+        *axs, ax2 = axs  # last axis goes to ax2
+
+        _hide_axes_ticks_and_labels(ax2, axes='y')
+        if col > 0:
+            for ax in axs:
+                _hide_axes_ticks_and_labels(ax, axes='y')
+
+        axs[0].set_title(month, fontsize=8)
+        for ax, v_range, h_range in zip(axs, v_ranges, h_ranges):
+            h_min, h_max = h_range
+            if h_min is None:
+                h_min = ds['height_km'].min().item() - 0.5
+            if h_max is None:
+                h_max = ds['height_km'].max().item() + 0.5
+            h_range = (h_min, h_max)
+
+            ax.grid(linewidth=0.5, color='grey', alpha=0.4)
+            ax.tick_params(axis='x', labelsize=6)
+            ax.tick_params(axis='y', labelsize=6)
+            ax.set(xlim=v_range, ylim=h_range)
+
+        for period, ds_month_period in ds_month.xrx.iterate('period'):
+            c = ds_month_period['color'].item()
+            lm = ds_month_period['linemarker'].item()
+            ls = ds_month_period['percentiles_linestyle'].item()
+            for j, ax in enumerate(axs):
+                _line, = ax.plot(
+                    ds_month_period[f'{specie}_mean'],
+                    ds_month_period['height_km'],
+                    color=c,
+                    marker=lm,
+                    linewidth=1
+                )
+                if i == 0 and j == 0:
+                    legend_items.append(_line)
+                for stat in ['p5', 'p95']:
+                    ax.plot(
+                        ds_month_period[f'{specie}_{stat}'],
+                        ds_month_period['height_km'],
+                        color=c,
+                        linestyle=ls,
+                        linewidth=1
+                    )
+
+        ax2.tick_params(axis='x', which='both', labelsize=5)
+        ax2.set(xlim=(0.9, ds[f'{specie}_flights'].max().values))
+        if col == 0:
+            ax2.set_ylabel('profiles', fontsize=6)
+        ax2.barh(
+            y=ds_month['period'],
+            width=ds_month[f'{specie}_flights'],
+            color=ds_month['color'].values,
+            log=True
+        )
+        ax2.invert_yaxis()
+
+    fig.legend(legend_items, ds['period'].values, loc='outside lower center', ncols=len(legend_items))
+    return fig
+
+
+def plot_profiles(fig, ds, facet_dim, multiline_dim, specie, v_ranges, h_ranges, grid_spans):
+    assert len(v_ranges) == len(h_ranges) == len(grid_spans) - 1
+    grid_spans = np.concatenate([[0], np.asarray(grid_spans)])
+    grid_spans_start, grid_spans_stop = np.cumsum(grid_spans)[:-1], np.cumsum(grid_spans)[1:]
+    grid_spans_slice = [slice(start, stop) for start, stop in zip(grid_spans_start, grid_spans_stop)]
+
+    facets = len(ds[facet_dim])
+    ncols = (facets + 1) // 2
+    gs = gridspec.GridSpec(2, ncols, hspace=0.3, figure=fig)
+    legend_items = []
+
+    for i, (facet_label, ds_facet) in enumerate(ds.xrx.iterate(facet_dim)):
+        row = i // ncols
+        col = i % ncols
+        gs_facet = gridspec.GridSpecFromSubplotSpec(nrows=np.sum(grid_spans), ncols=1, subplot_spec=gs[row, col])
+        axs = [
+            fig.add_subplot(gs_facet[grid_span_slice, 0])
+            for grid_span_slice in grid_spans_slice
+        ]
+        *axs, ax2 = axs  # last axis goes to ax2
+
+        _hide_axes_ticks_and_labels(ax2, axes='y')
+        if col > 0:
+            for ax in axs:
+                _hide_axes_ticks_and_labels(ax, axes='y')
+
+        axs[0].set_title(facet_label, fontsize=8)
+        for ax, v_range, h_range in zip(axs, v_ranges, h_ranges):
+            h_min, h_max = h_range
+            if h_min is None:
+                h_min = ds['height_km'].min().item() - 0.5
+            if h_max is None:
+                h_max = ds['height_km'].max().item() + 0.5
+            h_range = (h_min, h_max)
+
+            ax.grid(linewidth=0.5, color='grey', alpha=0.4)
+            ax.tick_params(axis='x', labelsize=6)
+            ax.tick_params(axis='y', labelsize=6)
+            ax.set(xlim=v_range, ylim=h_range)
+
+        for _, ds_singleline in ds_facet.xrx.iterate(multiline_dim):
+            c = ds_singleline['color'].item()
+            lm = ds_singleline['linemarker'].item()
+            ls = ds_singleline['percentiles_linestyle'].item()
+            for j, ax in enumerate(axs):
+                _line, = ax.plot(
+                    ds_singleline[f'{specie}_mean'],
+                    ds_singleline['height_km'],
+                    color=c,
+                    marker=lm,
+                    linewidth=1
+                )
+                if i == 0 and j == 0:
+                    legend_items.append(_line)
+                for stat in ['p5', 'p95']:
+                    ax.plot(
+                        ds_singleline[f'{specie}_{stat}'],
+                        ds_singleline['height_km'],
+                        color=c,
+                        linestyle=ls,
+                        linewidth=1
+                    )
+
+        ax2.tick_params(axis='x', which='both', labelsize=5)
+        ax2.set(xlim=(0.9, ds[f'{specie}_flights'].max().values))
+        if col == 0:
+            ax2.set_ylabel('profiles', fontsize=6)
+        ax2.barh(
+            y=ds_facet[multiline_dim],
+            width=ds_facet[f'{specie}_flights'],
+            color=ds_facet['color'].values,
+            log=True
+        )
+        ax2.invert_yaxis()
+
+    fig.legend(legend_items, ds[multiline_dim].values, loc='outside lower center', ncols=len(legend_items))
+    return fig
 
 
 def init_default_axis(ax, data, facet_dims):
