@@ -242,6 +242,138 @@ def plot_profiles(fig, ds, facet_dim, multiline_dim, specie, v_ranges, h_ranges,
     return fig
 
 
+def plot_seasonal_cycles(fig, ds, facet_dim, multiline_dim, x_dim, specie, v_range):
+    nfacets = len(ds[facet_dim])
+    nlines = len(ds[multiline_dim])
+    gs = gridspec.GridSpec(2, nfacets, figure=fig, wspace=0.05)
+    legend_items = []
+
+    for col, (facet_label, ds_facet) in enumerate(ds.xrx.iterate(facet_dim)):
+        row = 0
+        gs_facet = gridspec.GridSpecFromSubplotSpec(nrows=2, ncols=1, subplot_spec=gs[row, col])
+        ax_lineplot = fig.add_subplot(gs_facet[0, 0])
+        gs_barplots = gridspec.GridSpecFromSubplotSpec(nrows=nlines, ncols=1, subplot_spec=gs_facet[1, 0], hspace=0.05)
+        axs_barplot = [
+            fig.add_subplot(gs_barplots[i, 0], sharex=ax_lineplot)
+            for i in range(nlines)
+        ]
+
+        if col > 0:
+            _hide_axes_ticks_and_labels(ax_lineplot, axes='y')
+            for ax_barplot in axs_barplot:
+                _hide_axes_ticks_and_labels(ax_barplot, axes='y')
+
+        for i, ax_barplot in enumerate(axs_barplot):
+            #if i != nlines - 1:
+            _hide_axes_ticks_and_labels(ax_barplot, axes='x')
+
+        ax_lineplot.set_title(facet_label, fontsize=8)
+
+        ax_lineplot.grid(linewidth=0.5, color='grey', alpha=0.4)
+        ax_lineplot.tick_params(axis='x', labelsize=6)
+        ax_lineplot.tick_params(axis='y', labelsize=6)
+        ax_lineplot.set(ylim=v_range)
+        _months = ds[x_dim].values
+        ax_lineplot.xaxis.set_major_formatter(lambda tl, pos: _months[tl][0])
+
+        for i, ax_barplot in enumerate(axs_barplot):
+            ax_barplot.grid(axis='x', linewidth=0.5, color='grey', alpha=0.4)
+            ax_barplot.tick_params(axis='x', labelsize=6)
+            ax_barplot.tick_params(axis='y', labelsize=6)
+            #ax_barplot.set(ylim=(0, ds[f'{specie}_flights'].isel({multiline_dim: i}).max().item()))
+            ax_barplot.set(ylim=(0, ds[f'{specie}_flights'].max().item()))
+
+
+        for i, (_, ds_singleline) in enumerate(ds_facet.xrx.iterate(multiline_dim)):
+            c = ds_singleline['color'].item()
+            lm = ds_singleline['linemarker'].item()
+            ls = ds_singleline['percentiles_linestyle'].item()
+
+            _line, = ax_lineplot.plot(
+                ds_singleline[x_dim],
+                ds_singleline[f'{specie}_mean'],
+                color=c,
+                marker=lm,
+                linewidth=1
+            )
+            if col == 0:
+                legend_items.append(_line)
+            for stat in ['p5', 'p95']:
+                ax_lineplot.plot(
+                    ds_singleline[x_dim],
+                    ds_singleline[f'{specie}_{stat}'],
+                    color=c,
+                    linestyle=ls,
+                    linewidth=1
+                )
+
+            axs_barplot[i].bar(
+                x=ds_singleline[x_dim],
+                height=ds_singleline[f'{specie}_flights'],
+                color=c,
+            )
+
+    fig.legend(legend_items, ds[multiline_dim].values, loc='outside lower center', ncols=len(legend_items))
+    return fig
+
+
+def multifacet_plot(fig, ds, facet_dim, multiline_dim, x_dim, specie, v_range):
+    facets = len(ds[facet_dim])
+    ncols = (facets + 1) // 2
+    gs = gridspec.GridSpec(2, ncols, hspace=0.3, figure=fig)
+    legend_items = []
+
+    for i, (facet_label, ds_facet) in enumerate(ds.xrx.iterate(facet_dim)):
+        row = i // ncols
+        col = i % ncols
+        ax = fig.add_subplot(gs)
+        if col > 0:
+            _hide_axes_ticks_and_labels(ax, axes='y')
+
+        ax.set_title(facet_label, fontsize=8)
+        ax.grid(linewidth=0.5, color='grey', alpha=0.4)
+        ax.tick_params(axis='x', labelsize=6)
+        ax.tick_params(axis='y', labelsize=6)
+        ax.set(ylim=v_range)
+
+        for _, ds_singleline in ds_facet.xrx.iterate(multiline_dim):
+            c = ds_singleline['color'].item()
+            lm = ds_singleline['linemarker'].item()
+            ls = ds_singleline['percentiles_linestyle'].item()
+            _line, = ax.plot(
+                ds_singleline[f'{specie}_mean'],
+                ds_singleline[x_dim],
+                color=c,
+                marker=lm,
+                linewidth=1
+            )
+            if i == 0:
+                legend_items.append(_line)
+            for stat in ['p5', 'p95']:
+                ax.plot(
+                    ds_singleline[f'{specie}_{stat}'],
+                    ds_singleline['height_km'],
+                    color=c,
+                    linestyle=ls,
+                    linewidth=1
+                )
+
+        ax2.tick_params(axis='x', which='both', labelsize=5)
+        ax2.set(xlim=(0.9, max(ds[f'{specie}_flights'].max().values, 10)))
+        if col == 0:
+            ax2.set_ylabel('profiles', fontsize=6)
+        ax2.barh(
+            y=ds_facet[multiline_dim],
+            width=ds_facet[f'{specie}_flights'],
+            color=ds_facet['color'].values,
+            log=True
+        )
+        ax2.invert_yaxis()
+
+    fig.legend(legend_items, ds[multiline_dim].values, loc='outside lower center', ncols=len(legend_items))
+    return fig
+
+
 def init_default_axis(ax, data, facet_dims):
     ax.set_title(' '.join(str(data[d].values) for d in facet_dims), fontsize=10)
     ax.gridlines(
