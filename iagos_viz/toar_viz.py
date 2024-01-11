@@ -242,78 +242,111 @@ def plot_profiles(fig, ds, facet_dim, multiline_dim, specie, v_ranges, h_ranges,
     return fig
 
 
-def plot_seasonal_cycles(fig, ds, facet_dim, multiline_dim, x_dim, specie, v_range):
-    nfacets = len(ds[facet_dim])
-    nlines = len(ds[multiline_dim])
-    gs = gridspec.GridSpec(2, nfacets, figure=fig, wspace=0.05)
-    legend_items = []
+def plot_seasonal_cycles(
+        fig, ds_by_specie, facet_dim, multiline_dim, x_dim, v_range_by_specie,
+        single_legend=False,
+        primary_linewidth=0.75, secondary_linewidth=0.75,
+        margins=None
+):
+    if margins is None:
+        margins = {}
+    ds_any = list(ds_by_specie.values())[0]
+    nfacets = len(ds_any[facet_dim])
+    gs = gridspec.GridSpec(
+        len(ds_by_specie),
+        nfacets,
+        figure=fig,
+        #wspace=0.3,
+        **margins
+    )
+    legend_items_by_specie = {}
 
-    for col, (facet_label, ds_facet) in enumerate(ds.xrx.iterate(facet_dim)):
-        row = 0
-        gs_facet = gridspec.GridSpecFromSubplotSpec(nrows=2, ncols=1, subplot_spec=gs[row, col])
-        ax_lineplot = fig.add_subplot(gs_facet[0, 0])
-        gs_barplots = gridspec.GridSpecFromSubplotSpec(nrows=nlines, ncols=1, subplot_spec=gs_facet[1, 0], hspace=0.05)
-        axs_barplot = [
-            fig.add_subplot(gs_barplots[i, 0], sharex=ax_lineplot)
-            for i in range(nlines)
-        ]
+    for row, (specie, ds) in enumerate(ds_by_specie.items()):
+        flight_max = max(ds[f'{specie}_flights'].max().item(), 5)
+        legend_items_by_specie[specie] = {}
+        nlines = len(ds[multiline_dim])
 
-        if col > 0:
-            _hide_axes_ticks_and_labels(ax_lineplot, axes='y')
-            for ax_barplot in axs_barplot:
-                _hide_axes_ticks_and_labels(ax_barplot, axes='y')
+        for col, (facet_label, ds_facet) in enumerate(ds.xrx.iterate(facet_dim)):
+            gs_facet = gridspec.GridSpecFromSubplotSpec(nrows=2, ncols=1, subplot_spec=gs[row, col], height_ratios=[0.6, 0.4])
+            ax_lineplot = fig.add_subplot(gs_facet[0, 0])
+            gs_barplots = gridspec.GridSpecFromSubplotSpec(nrows=nlines, ncols=1, subplot_spec=gs_facet[1, 0], hspace=0.5)
+            axs_barplot = [
+                fig.add_subplot(gs_barplots[i, 0], sharex=ax_lineplot)
+                for i in range(nlines)
+            ]
 
-        for i, ax_barplot in enumerate(axs_barplot):
-            #if i != nlines - 1:
-            _hide_axes_ticks_and_labels(ax_barplot, axes='x')
+            # _hide_axes_ticks_and_labels(ax_lineplot, axes='y')
+            # if col > 0:
+                # for ax_barplot in axs_barplot:
+                    # _hide_axes_ticks_and_labels(ax_barplot, axes='y')
 
-        ax_lineplot.set_title(facet_label, fontsize=8)
+            for i, ax_barplot in enumerate(axs_barplot):
+                _hide_axes_ticks_and_labels(ax_barplot, axes='x')
 
-        ax_lineplot.grid(linewidth=0.5, color='grey', alpha=0.4)
-        ax_lineplot.tick_params(axis='x', labelsize=6)
-        ax_lineplot.tick_params(axis='y', labelsize=6)
-        ax_lineplot.set(ylim=v_range)
-        _months = ds[x_dim].values
-        ax_lineplot.xaxis.set_major_formatter(lambda tl, pos: _months[tl][0])
+            ax_lineplot.set_title(f'{specie}: {facet_label}', fontsize=8)
 
-        for i, ax_barplot in enumerate(axs_barplot):
-            ax_barplot.grid(axis='x', linewidth=0.5, color='grey', alpha=0.4)
-            ax_barplot.tick_params(axis='x', labelsize=6)
-            ax_barplot.tick_params(axis='y', labelsize=6)
-            #ax_barplot.set(ylim=(0, ds[f'{specie}_flights'].isel({multiline_dim: i}).max().item()))
-            ax_barplot.set(ylim=(0, ds[f'{specie}_flights'].max().item()))
+            ax_lineplot.grid(linewidth=0.5, color='grey', alpha=0.4)
+            ax_lineplot.tick_params(axis='x', labelsize=6)
+            ax_lineplot.tick_params(axis='y', labelsize=6)
+            ax_lineplot.set(ylim=v_range_by_specie[specie][col])
+            _x_labels = ds[x_dim].values
+            if _x_labels.dtype == str:
+                ax_lineplot.xaxis.set_major_formatter(lambda tl, pos: _x_labels[tl][0])
+            elif _x_labels.dtype == int:
+                pass
 
+            for i, ax_barplot in enumerate(axs_barplot):
+                ax_barplot.grid(axis='x', linewidth=0.5, color='grey', alpha=0.4)
+                ax_barplot.tick_params(axis='x', labelsize=6)
+                ax_barplot.tick_params(axis='y', labelsize=6)
+                ax_barplot.set(ylim=(0, flight_max))
 
-        for i, (_, ds_singleline) in enumerate(ds_facet.xrx.iterate(multiline_dim)):
-            c = ds_singleline['color'].item()
-            lm = ds_singleline['linemarker'].item()
-            ls = ds_singleline['percentiles_linestyle'].item()
+            for i, (_, ds_singleline) in enumerate(ds_facet.xrx.iterate(multiline_dim)):
+                c = ds_singleline['color'].item()
+                lm = ds_singleline['linemarker'].item()
+                ls = ds_singleline['percentiles_linestyle'].item()
 
-            _line, = ax_lineplot.plot(
-                ds_singleline[x_dim],
-                ds_singleline[f'{specie}_mean'],
-                color=c,
-                marker=lm,
-                linewidth=1
-            )
-            if col == 0:
-                legend_items.append(_line)
-            for stat in ['p5', 'p95']:
-                ax_lineplot.plot(
+                _line, = ax_lineplot.plot(
                     ds_singleline[x_dim],
-                    ds_singleline[f'{specie}_{stat}'],
+                    ds_singleline[f'{specie}_mean'],
                     color=c,
-                    linestyle=ls,
-                    linewidth=1
+                    marker=lm,
+                    linewidth=primary_linewidth,
+                )
+                if col == 0:
+                    legend_items_by_specie[specie][_] = _line
+                for stat in ['p5', 'p95']:
+                    ax_lineplot.plot(
+                        ds_singleline[x_dim],
+                        ds_singleline[f'{specie}_{stat}'],
+                        color=c,
+                        linestyle=ls,
+                        linewidth=secondary_linewidth,
+                    )
+
+                axs_barplot[i].bar(
+                    x=ds_singleline[x_dim],
+                    height=ds_singleline[f'{specie}_flights'],
+                    color=c,
                 )
 
-            axs_barplot[i].bar(
-                x=ds_singleline[x_dim],
-                height=ds_singleline[f'{specie}_flights'],
-                color=c,
-            )
-
-    fig.legend(legend_items, ds[multiline_dim].values, loc='outside lower center', ncols=len(legend_items))
+    if single_legend:
+        legend_loc = ['lower center']
+        title = None
+    else:
+        legend_loc = ['lower left', 'lower right']
+        title = f'{multiline_dim.capitalize()} for {specie} observations:'
+    for specie, loc in zip(ds_by_specie, legend_loc):
+        fig.legend(
+            list(legend_items_by_specie[specie].values()),
+            list(legend_items_by_specie[specie].keys()),
+            loc=loc,
+            fontsize=6,
+            title=title,
+            title_fontsize=6,
+            alignment='left',
+            ncols=len(legend_items_by_specie[specie])
+        )
     return fig
 
 
