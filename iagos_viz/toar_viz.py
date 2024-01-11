@@ -479,9 +479,9 @@ def get_lon_lat_plots(
 
     if norm is None:
         norm = colors.Normalize
-    _vmin = _da.min().item() if vmin is None else vmin
-    _vmax = _da.max().item() if vmax is None else vmax
-    norm = norm(vmin=_vmin, vmax=_vmax)
+        _vmin = _da.min().item() if vmin is None else vmin
+        _vmax = _da.max().item() if vmax is None else vmax
+        norm = norm(vmin=_vmin, vmax=_vmax)
 
     if shading == 'flat':
         # check if lon/lat cells are adjacent
@@ -509,6 +509,8 @@ def get_lon_lat_plots(
         layout='constrained',
         figsize=figsize
     )
+    if nrows == 1 and ncols == 1:
+        axs = np.asanyarray([axs])
     if orient == 'column':
         axs = axs.T
     axs = axs.flatten()
@@ -556,16 +558,19 @@ def get_lon_lat_plots(
 
         # if data has only NaN's and vmin or vmax is not given, matplotlib will crash when calc. min/max, so skip plotting in such case:
         #if vmin is not None and vmax is not None or data.notnull().any():
-        pc = ax.pcolormesh(
-            lon_mesh, lat_mesh,
-            data.transpose(LAT, LON).values,
+        _pcolormesh_kwargs = dict(
             transform=ccrs.PlateCarree(),
             cmap=cmap,
             norm=norm,
             edgecolors='none',
             shading=shading,
             snap=True,
-            **pcolormesh_kwargs
+        )
+        _pcolormesh_kwargs.update(pcolormesh_kwargs)
+        pc = ax.pcolormesh(
+            lon_mesh, lat_mesh,
+            data.transpose(LAT, LON).values,
+            **_pcolormesh_kwargs
         )
 
     # Draw the colorbar
