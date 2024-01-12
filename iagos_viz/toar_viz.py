@@ -441,6 +441,7 @@ def set_default_yticks(ax, data):
 def get_lon_lat_plots(
         da,
         vmin=None, vmax=None,
+        colorbar_extend=None,
         cmap=None,
         norm=None,
         plot_type='colormesh',
@@ -630,10 +631,11 @@ def get_lon_lat_plots(
             raise ValueError(plot_type)
 
     # Draw the colorbar
-    if vmin is not None:
-        colorbar_extend = 'both' if vmax is not None else 'min'
-    else:
-        colorbar_extend = 'max' if vmax is not None else 'neither'
+    if colorbar_extend is None:
+        if vmin is not None:
+            colorbar_extend = 'both' if vmax is not None else 'min'
+        else:
+            colorbar_extend = 'max' if vmax is not None else 'neither'
     cbar = fig.colorbar(_plot, ax=axs, orientation='horizontal', location='bottom', extend=colorbar_extend, shrink=0.4)
 
     # Add a big title at the top
