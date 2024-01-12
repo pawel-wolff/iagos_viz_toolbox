@@ -443,6 +443,7 @@ def get_lon_lat_plots(
         vmin=None, vmax=None,
         cmap=None,
         norm=None,
+        plot_type='colormesh',
         shading='flat',
         ncols=None, nrows=None,
         facet_dims=None,
@@ -457,7 +458,7 @@ def get_lon_lat_plots(
         set_xticks_kwargs=None,
         set_yticks='default',
         set_yticks_kwargs=None,
-        pcolormesh_kwargs=None
+        plotting_kwargs=None
 ):
     """
     See:
@@ -468,7 +469,7 @@ def get_lon_lat_plots(
     :param vmin:
     :param vmax:
     :param cmap:
-    :param norm:
+    :param norm: an instance of colors.Normalize, colors.LogNorm or colors.PowerNorm
     :param shading:
     :param ncols:
     :param nrows:
@@ -487,12 +488,13 @@ def get_lon_lat_plots(
     :return:
     """
     assert orient in ['column', 'row']
-    assert shading in ['flat', 'gouraud']
+    assert plot_type in ['colormesh', 'contour']
+    assert shading in ['flat', 'nearest', 'gouraud'] or shading is None and plot_type == 'contour'
 
     if projection is None:
         projection = ccrs.PlateCarree()
-    if pcolormesh_kwargs is None:
-        pcolormesh_kwargs = {}
+    if plotting_kwargs is None:
+        plotting_kwargs = {}
 
     # setup facet_dim
     if facet_dims is None:
@@ -516,7 +518,7 @@ def get_lon_lat_plots(
         _vmax = _da.max().item() if vmax is None else vmax
         norm = norm(vmin=_vmin, vmax=_vmax)
 
-    if shading == 'flat':
+    if plot_type == 'colormesh' and shading == 'flat':
         # check if lon/lat cells are adjacent
         if not np.allclose(_da[LON_LB].values[1:], _da[LON_UB].values[:-1]):
             raise ValueError(f'{LON} cells are not adjacent')
@@ -528,9 +530,11 @@ def get_lon_lat_plots(
         lat_grid = np.concatenate((_da[LAT_LB].values, [float(_da[LAT_UB].max())]))
         lon_mesh, lat_mesh = np.meshgrid(lon_grid, lat_grid)
         extent = None  # data extent applies
-    elif shading == 'gouraud':
+    elif plot_type == 'contour' or shading in ['nearest', 'gouraud']:
         lon_mesh, lat_mesh = np.meshgrid(_da[LON].values, _da[LAT].values)
         extent = float(_da[LON_LB].min()), float(_da[LON_UB].max()), float(_da[LAT_LB].min()), float(_da[LAT_UB].max())
+    else:
+        raise ValueError(f'Invalid parameters combination: plot_type={plot_type}, shading={shading}')
 
     nrows, ncols = get_nrows_ncols(da[_facet_dim], nrows, ncols, orient)
 
@@ -591,27 +595,43 @@ def get_lon_lat_plots(
 
         # if data has only NaN's and vmin or vmax is not given, matplotlib will crash when calc. min/max, so skip plotting in such case:
         #if vmin is not None and vmax is not None or data.notnull().any():
-        _pcolormesh_kwargs = dict(
-            transform=ccrs.PlateCarree(),
-            cmap=cmap,
-            norm=norm,
-            edgecolors='none',
-            shading=shading,
-            snap=True,
-        )
-        _pcolormesh_kwargs.update(pcolormesh_kwargs)
-        pc = ax.pcolormesh(
-            lon_mesh, lat_mesh,
-            data.transpose(LAT, LON).values,
-            **_pcolormesh_kwargs
-        )
+
+        if plot_type == 'colormesh':
+            pcolormesh_kwargs = dict(
+                transform=ccrs.PlateCarree(),
+                cmap=cmap,
+                norm=norm,
+                edgecolors='none',
+                shading=shading,
+                snap=True,
+            )
+            pcolormesh_kwargs.update(plotting_kwargs)
+            _plot = ax.pcolormesh(
+                lon_mesh, lat_mesh,
+                data.transpose(LAT, LON).values,
+                **pcolormesh_kwargs
+            )
+        elif plot_type == 'contour':
+            contourf_kwargs = dict(
+                transform=ccrs.PlateCarree(),
+                cmap=cmap,
+                norm=norm,
+            )
+            contourf_kwargs.update(plotting_kwargs)
+            _plot = ax.contourf(
+                lon_mesh, lat_mesh,
+                data.transpose(LAT, LON).values,
+                **contourf_kwargs
+            )
+        else:
+            raise ValueError(plot_type)
 
     # Draw the colorbar
     if vmin is not None:
         colorbar_extend = 'both' if vmax is not None else 'min'
     else:
         colorbar_extend = 'max' if vmax is not None else 'neither'
-    cbar = fig.colorbar(pc, ax=axs, orientation='horizontal', location='bottom', extend=colorbar_extend, shrink=0.4)
+    cbar = fig.colorbar(_plot, ax=axs, orientation='horizontal', location='bottom', extend=colorbar_extend, shrink=0.4)
 
     # Add a big title at the top
     if title == 'default':
