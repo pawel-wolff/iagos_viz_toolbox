@@ -448,7 +448,7 @@ def get_lon_lat_plots(
         ncols=None, nrows=None,
         facet_dims=None,
         projection=None,
-        set_extent=True,
+        extent='auto',
         figsize=(10.7, 7.3),
         orient='column',
         title='default',
@@ -530,10 +530,10 @@ def get_lon_lat_plots(
         lon_grid = np.concatenate((_da[LON_LB].values, [float(_da[LON_UB].max())]))
         lat_grid = np.concatenate((_da[LAT_LB].values, [float(_da[LAT_UB].max())]))
         lon_mesh, lat_mesh = np.meshgrid(lon_grid, lat_grid)
-        extent = None  # data extent applies
+        _extent = None  # data extent applies
     elif plot_type == 'contour' or shading in ['nearest', 'gouraud']:
         lon_mesh, lat_mesh = np.meshgrid(_da[LON].values, _da[LAT].values)
-        extent = float(_da[LON_LB].min()), float(_da[LON_UB].max()), float(_da[LAT_LB].min()), float(_da[LAT_UB].max())
+        _extent = float(_da[LON_LB].min()), float(_da[LON_UB].max()), float(_da[LAT_LB].min()), float(_da[LAT_UB].max())
     else:
         raise ValueError(f'Invalid parameters combination: plot_type={plot_type}, shading={shading}')
 
@@ -561,7 +561,9 @@ def get_lon_lat_plots(
     # generate figures for each facet
     for i, (ax, _facet_label) in enumerate(zip(axs, _da[_facet_dim].values)):
         data = _da.sel({_facet_dim: _facet_label})
-        if set_extent and extent is not None:
+        if extent == 'auto' and _extent is not None:
+            extent = _extent
+        if extent is not None:
             ax.set_extent(extent, crs=ccrs.PlateCarree())
         if init_axis == 'default':
             init_default_axis(ax, data, facet_dims=facet_dims)
