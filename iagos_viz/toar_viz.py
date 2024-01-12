@@ -448,6 +448,7 @@ def get_lon_lat_plots(
         ncols=None, nrows=None,
         facet_dims=None,
         projection=None,
+        set_extent=True,
         figsize=(10.7, 7.3),
         orient='column',
         title='default',
@@ -560,8 +561,8 @@ def get_lon_lat_plots(
     # generate figures for each facet
     for i, (ax, _facet_label) in enumerate(zip(axs, _da[_facet_dim].values)):
         data = _da.sel({_facet_dim: _facet_label})
-        if extent is not None:
-            ax.set_extent(extent)
+        if set_extent and extent is not None:
+            ax.set_extent(extent, crs=ccrs.PlateCarree())
         if init_axis == 'default':
             init_default_axis(ax, data, facet_dims=facet_dims)
         elif init_axis is None:
