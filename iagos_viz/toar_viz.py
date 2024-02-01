@@ -290,7 +290,7 @@ def plot_seasonal_cycles(
             ax_lineplot.tick_params(axis='y', labelsize=6)
             ax_lineplot.set(ylim=v_range_by_specie[specie][col])
             _x_labels = ds[x_dim].values
-            if _x_labels.dtype == str:
+            if _x_labels.dtype.kind in ['O', 'U', 'S']:
                 ax_lineplot.xaxis.set_major_formatter(lambda tl, pos: _x_labels[tl][0])
             elif _x_labels.dtype == int:
                 pass
@@ -332,11 +332,11 @@ def plot_seasonal_cycles(
 
     if single_legend:
         legend_loc = ['lower center']
-        title = None
+        titles = [None]
     else:
         legend_loc = ['lower left', 'lower right']
-        title = f'{multiline_dim.capitalize()} for {specie} observations:'
-    for specie, loc in zip(ds_by_specie, legend_loc):
+        titles = [f'{multiline_dim.capitalize()} for {specie} observations:' for specie in ds_by_specie]
+    for specie, loc, title in zip(ds_by_specie, legend_loc, titles):
         fig.legend(
             list(legend_items_by_specie[specie].values()),
             list(legend_items_by_specie[specie].keys()),
