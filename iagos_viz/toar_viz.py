@@ -538,6 +538,9 @@ def get_lon_lat_plots(
     else:
         raise ValueError(f'Invalid parameters combination: plot_type={plot_type}, shading={shading}')
 
+    if extent == 'auto':
+        extent = _extent
+
     nrows, ncols = get_nrows_ncols(da[_facet_dim], nrows, ncols, orient)
 
     # init fig and axes
@@ -562,8 +565,6 @@ def get_lon_lat_plots(
     # generate figures for each facet
     for i, (ax, _facet_label) in enumerate(zip(axs, _da[_facet_dim].values)):
         data = _da.sel({_facet_dim: _facet_label})
-        if extent == 'auto' and _extent is not None:
-            extent = _extent
         if extent is not None:
             ax.set_extent(extent, crs=ccrs.PlateCarree())
         if init_axis == 'default':
