@@ -514,19 +514,16 @@ def get_lon_lat_plots(
 
     _da = _da.xrx.make_coordinates_increasing([LON, LAT])
 
-    if colorbar_extend is None:
-        if norm is not None:
-            colorbar_extend = 'both'
-        elif vmin is not None:
-            colorbar_extend = 'both' if vmax is not None else 'min'
-        else:
-            colorbar_extend = 'max' if vmax is not None else 'neither'
-
     if norm is None:
-        norm = colors.Normalize
-        _vmin = _da.min().item() if vmin is None else vmin
-        _vmax = _da.max().item() if vmax is None else vmax
-        norm = norm(vmin=_vmin, vmax=_vmax)
+        norm = colors.Normalize(vmin=vmin, vmax=vmax)
+
+    if colorbar_extend is None:
+        _vmin = norm.vmin
+        _vmax = norm.vmax
+        if _vmin is not None:
+            colorbar_extend = 'both' if _vmax is not None else 'min'
+        else:
+            colorbar_extend = 'max' if _vmax is not None else 'neither'
 
     if plot_type == 'colormesh' and shading == 'flat':
         # check if lon/lat cells are adjacent
