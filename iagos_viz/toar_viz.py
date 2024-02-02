@@ -163,7 +163,10 @@ def _hide_axes_ticks_and_labels(ax, axes='xy'):
             )
 
 
-def plot_profiles(fig, ds, facet_dim, multiline_dim, specie, v_ranges, h_ranges, grid_spans):
+def plot_profiles(
+        fig, ds, facet_dim, multiline_dim, specie, v_ranges, h_ranges, grid_spans,
+        main_stat='mean', aux_stats=('p5', 'p95')
+):
     assert len(v_ranges) == len(h_ranges) == len(grid_spans) - 1
     grid_spans = np.concatenate([[0], np.asarray(grid_spans)])
     grid_spans_start, grid_spans_stop = np.cumsum(grid_spans)[:-1], np.cumsum(grid_spans)[1:]
@@ -206,10 +209,9 @@ def plot_profiles(fig, ds, facet_dim, multiline_dim, specie, v_ranges, h_ranges,
         for _, ds_singleline in ds_facet.xrx.iterate(multiline_dim):
             c = ds_singleline['color'].item()
             lm = ds_singleline['linemarker'].item()
-            ls = ds_singleline['percentiles_linestyle'].item()
             for j, ax in enumerate(axs):
                 _line, = ax.plot(
-                    ds_singleline[f'{specie}_mean'],
+                    ds_singleline[f'{specie}_{main_stat}'],
                     ds_singleline['height_km'],
                     color=c,
                     marker=lm,
@@ -217,14 +219,16 @@ def plot_profiles(fig, ds, facet_dim, multiline_dim, specie, v_ranges, h_ranges,
                 )
                 if i == 0 and j == 0:
                     legend_items.append(_line)
-                for stat in ['p5', 'p95']:
-                    ax.plot(
-                        ds_singleline[f'{specie}_{stat}'],
-                        ds_singleline['height_km'],
-                        color=c,
-                        linestyle=ls,
-                        linewidth=1
-                    )
+                if aux_stats:
+                    ls = ds_singleline['aux_stat_linestyle'].item()
+                    for stat in aux_stats:
+                        ax.plot(
+                            ds_singleline[f'{specie}_{stat}'],
+                            ds_singleline['height_km'],
+                            color=c,
+                            linestyle=ls,
+                            linewidth=1
+                        )
 
         ax2.tick_params(axis='x', which='both', labelsize=5)
         ax2.set(xlim=(0.9, max(ds[f'{specie}_flights'].max().values, 10)))
@@ -244,6 +248,7 @@ def plot_profiles(fig, ds, facet_dim, multiline_dim, specie, v_ranges, h_ranges,
 
 def plot_seasonal_cycles(
         fig, ds_by_specie, facet_dim, multiline_dim, x_dim, v_range_by_specie,
+        main_stat='mean', aux_stats=('p5', 'p95'),
         single_legend=False,
         primary_linewidth=0.75, secondary_linewidth=0.75,
         margins=None
@@ -304,25 +309,26 @@ def plot_seasonal_cycles(
             for i, (_, ds_singleline) in enumerate(ds_facet.xrx.iterate(multiline_dim)):
                 c = ds_singleline['color'].item()
                 lm = ds_singleline['linemarker'].item()
-                ls = ds_singleline['percentiles_linestyle'].item()
 
                 _line, = ax_lineplot.plot(
                     ds_singleline[x_dim],
-                    ds_singleline[f'{specie}_mean'],
+                    ds_singleline[f'{specie}_{main_stat}'],
                     color=c,
                     marker=lm,
                     linewidth=primary_linewidth,
                 )
                 if col == 0:
                     legend_items_by_specie[specie][_] = _line
-                for stat in ['p5', 'p95']:
-                    ax_lineplot.plot(
-                        ds_singleline[x_dim],
-                        ds_singleline[f'{specie}_{stat}'],
-                        color=c,
-                        linestyle=ls,
-                        linewidth=secondary_linewidth,
-                    )
+                if aux_stats:
+                    ls = ds_singleline['aux_stat_linestyle'].item()
+                    for stat in aux_stats:
+                        ax_lineplot.plot(
+                            ds_singleline[x_dim],
+                            ds_singleline[f'{specie}_{stat}'],
+                            color=c,
+                            linestyle=ls,
+                            linewidth=secondary_linewidth,
+                        )
 
                 axs_barplot[i].bar(
                     x=ds_singleline[x_dim],
@@ -350,7 +356,10 @@ def plot_seasonal_cycles(
     return fig
 
 
-def multifacet_plot(fig, ds, facet_dim, multiline_dim, x_dim, specie, v_range):
+def multifacet_plot(
+        fig, ds, facet_dim, multiline_dim, x_dim, specie, v_range, 
+        main_stat='mean', aux_stats=('p5', 'p95'),
+):
     facets = len(ds[facet_dim])
     ncols = (facets + 1) // 2
     gs = gridspec.GridSpec(2, ncols, hspace=0.3, figure=fig)
@@ -372,9 +381,8 @@ def multifacet_plot(fig, ds, facet_dim, multiline_dim, x_dim, specie, v_range):
         for _, ds_singleline in ds_facet.xrx.iterate(multiline_dim):
             c = ds_singleline['color'].item()
             lm = ds_singleline['linemarker'].item()
-            ls = ds_singleline['percentiles_linestyle'].item()
             _line, = ax.plot(
-                ds_singleline[f'{specie}_mean'],
+                ds_singleline[f'{specie}_{main_stat}'],
                 ds_singleline[x_dim],
                 color=c,
                 marker=lm,
@@ -382,14 +390,16 @@ def multifacet_plot(fig, ds, facet_dim, multiline_dim, x_dim, specie, v_range):
             )
             if i == 0:
                 legend_items.append(_line)
-            for stat in ['p5', 'p95']:
-                ax.plot(
-                    ds_singleline[f'{specie}_{stat}'],
-                    ds_singleline['height_km'],
-                    color=c,
-                    linestyle=ls,
-                    linewidth=1
-                )
+            if aux_stats:
+                ls = ds_singleline['aux_stat_linestyle'].item()
+                for stat in aux_stats:
+                    ax.plot(
+                        ds_singleline[f'{specie}_{stat}'],
+                        ds_singleline['height_km'],
+                        color=c,
+                        linestyle=ls,
+                        linewidth=1
+                    )
 
         ax2.tick_params(axis='x', which='both', labelsize=5)
         ax2.set(xlim=(0.9, max(ds[f'{specie}_flights'].max().values, 10)))
