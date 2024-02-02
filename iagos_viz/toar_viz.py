@@ -514,6 +514,14 @@ def get_lon_lat_plots(
 
     _da = _da.xrx.make_coordinates_increasing([LON, LAT])
 
+    if colorbar_extend is None:
+        if norm is not None:
+            colorbar_extend = 'both'
+        elif vmin is not None:
+            colorbar_extend = 'both' if vmax is not None else 'min'
+        else:
+            colorbar_extend = 'max' if vmax is not None else 'neither'
+
     if norm is None:
         norm = colors.Normalize
         _vmin = _da.min().item() if vmin is None else vmin
@@ -632,11 +640,6 @@ def get_lon_lat_plots(
             raise ValueError(plot_type)
 
     # Draw the colorbar
-    if colorbar_extend is None:
-        if vmin is not None:
-            colorbar_extend = 'both' if vmax is not None else 'min'
-        else:
-            colorbar_extend = 'max' if vmax is not None else 'neither'
     cbar = fig.colorbar(_plot, ax=axs, orientation='horizontal', location='bottom', extend=colorbar_extend, shrink=0.4)
 
     # Add a big title at the top
