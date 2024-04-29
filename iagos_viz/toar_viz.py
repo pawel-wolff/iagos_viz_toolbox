@@ -167,6 +167,21 @@ def plot_profiles(
         fig, ds, facet_dim, multiline_dim, specie, v_ranges, h_ranges, grid_spans,
         main_stat='mean', aux_stats=('p5', 'p95')
 ):
+    """
+
+    :param fig:
+    :param ds:
+    :param facet_dim:
+    :param multiline_dim: str; if 'specie' then that dimension is expected to be of length 2; draw two x-axes
+    :param specie: str; label of the variable to plot (without a stat suffix)
+    :param v_ranges: list of (x_min, x_max) pairs unless if multiline_dim is 'specie',
+    then list of dict {specie_label -> (x_min, x_max}}
+    :param h_ranges:
+    :param grid_spans:
+    :param main_stat: str;
+    :param aux_stats:
+    :return:
+    """
     assert len(v_ranges) == len(h_ranges) == len(grid_spans) - 1
     grid_spans = np.concatenate([[0], np.asarray(grid_spans)])
     grid_spans_start, grid_spans_stop = np.cumsum(grid_spans)[:-1], np.cumsum(grid_spans)[1:]
@@ -176,6 +191,7 @@ def plot_profiles(
     ncols = (facets + 1) // 2
     gs = gridspec.GridSpec(2, ncols, hspace=0.3, figure=fig)
     legend_items = []
+    legend_labels = ds[multiline_dim].values
 
     for i, (facet_label, ds_facet) in enumerate(ds.xrx.iterate(facet_dim)):
         row = i // ncols
@@ -187,13 +203,23 @@ def plot_profiles(
         ]
         *axs, ax2 = axs  # last axis goes to ax2
 
+        if multiline_dim == 'specie':
+            # create secondary x-axes
+            # see: https://matplotlib.org/stable/gallery/subplots_axes_and_figures/two_scales.html
+            axs1 = []
+            for ax in axs:
+                ax1 = ax.twiny()
+                axs1.append(dict(zip(legend_labels, (ax, ax1))))
+
         _hide_axes_ticks_and_labels(ax2, axes='y')
         if col > 0:
             for ax in axs:
                 _hide_axes_ticks_and_labels(ax, axes='y')
 
         axs[0].set_title(facet_label, fontsize=8)
-        for ax, v_range, h_range in zip(axs, v_ranges, h_ranges):
+        for ax_idx, (ax, v_range, h_range) in enumerate(zip(axs, v_ranges, h_ranges)):
+            if multiline_dim == 'specie':
+                ax_by_specie = axs1[ax_idx]
             h_min, h_max = h_range
             if h_min is None:
                 h_min = ds['height_km'].min().item() - 0.5
@@ -202,16 +228,29 @@ def plot_profiles(
             h_range = (h_min, h_max)
 
             ax.grid(linewidth=0.5, color='grey', alpha=0.4)
-            ax.tick_params(axis='x', labelsize=6)
             ax.tick_params(axis='y', labelsize=6)
-            ax.set(xlim=v_range, ylim=h_range)
+            if multiline_dim != 'specie':
+                ax.set(xlim=v_range, ylim=h_range)
+                ax.tick_params(axis='x', labelsize=6)
+            else:
+                # is this case, legend_labels contains labels of the species
+                for sp, _ax in ax_by_specie.items():
+                    _ax.set(xlim=v_range[sp], ylim=h_range)
+                    _ax.tick_params(
+                        axis='x',
+                        labelsize=6,
+                        labelcolor=ds_facet['color'].sel({multiline_dim: sp}).item(),
+                    )
 
-        for _, ds_singleline in ds_facet.xrx.iterate(multiline_dim):
+        specie_main_stat = f'{specie}_{main_stat}'
+        for _idx, ds_singleline in ds_facet.xrx.iterate(multiline_dim):
             c = ds_singleline['color'].item()
             lm = ds_singleline['linemarker'].item()
-            for j, ax in enumerate(axs):
+            for j, ax in enumerate(axs if multiline_dim != 'specie' else axs1):
+                if multiline_dim == 'specie':
+                    ax = ax[_idx]
                 _line, = ax.plot(
-                    ds_singleline[f'{specie}_{main_stat}'],
+                    ds_singleline[specie_main_stat],
                     ds_singleline['height_km'],
                     color=c,
                     marker=lm,
@@ -242,7 +281,7 @@ def plot_profiles(
         )
         ax2.invert_yaxis()
 
-    fig.legend(legend_items, ds[multiline_dim].values, loc='outside lower center', ncols=len(legend_items))
+    fig.legend(legend_items, legend_labels, loc='outside lower center', ncols=len(legend_items))
     return fig
 
 
