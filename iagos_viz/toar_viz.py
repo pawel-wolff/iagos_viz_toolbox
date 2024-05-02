@@ -376,8 +376,8 @@ def plot_seasonal_cycles(
                 )
 
     if single_legend:
-        legend_loc = ['lower center']
-        titles = [None]
+        legend_loc = ['lower center'] * len(ds_by_specie)
+        titles = [None] * len(ds_by_specie)
     else:
         legend_loc = ['lower left', 'lower right']
         titles = [f'{multiline_dim.capitalize()} for {specie} observations:' for specie in ds_by_specie]
@@ -392,6 +392,121 @@ def plot_seasonal_cycles(
             alignment='left',
             ncols=len(legend_items_by_specie[specie])
         )
+    return fig
+
+
+def plot_seasonal_cycles_for_two_variables(
+        fig, ds_by_specie, facet_dim, multiline_dim, x_dim, v_range_by_specie,
+        main_stat='mean', aux_stats=('p5', 'p95'),
+        primary_linewidth=0.75, secondary_linewidth=0.75,
+        margins=None
+):
+    assert len(ds_by_specie) == 2, 'must specify two variables'
+    if margins is None:
+        margins = {}
+    ds_any = list(ds_by_specie.values())[0]
+    nfacets = len(ds_any[facet_dim])
+    gs = gridspec.GridSpec(
+        1,
+        nfacets,
+        figure=fig,
+        #wspace=0.3,
+        **margins
+    )
+    legend_items_by_specie = {}
+
+    flight_max = 5
+    for specie, ds in ds_by_specie.items():
+        flight_max = max(ds[f'{specie}_flights'].max().item(), flight_max)
+
+    row = 0
+    nlines = len(ds_any[multiline_dim])
+
+    for col, facet_label in enumerate(ds_any[facet_dim]):
+        facet_label = facet_label.item()
+        gs_facet = gridspec.GridSpecFromSubplotSpec(nrows=2, ncols=1, subplot_spec=gs[row, col], height_ratios=[0.6, 0.4])
+        ax_lineplot = fig.add_subplot(gs_facet[0, 0])
+        gs_barplots = gridspec.GridSpecFromSubplotSpec(nrows=nlines, ncols=1, subplot_spec=gs_facet[1, 0], hspace=0.5)
+        axs_barplot = [
+            fig.add_subplot(gs_barplots[i, 0], sharex=ax_lineplot)
+            for i in range(nlines)
+        ]
+
+        # _hide_axes_ticks_and_labels(ax_lineplot, axes='y')
+        # if col > 0:
+            # for ax_barplot in axs_barplot:
+                # _hide_axes_ticks_and_labels(ax_barplot, axes='y')
+
+        # for i, ax_barplot in enumerate(axs_barplot):
+        #     _hide_axes_ticks_and_labels(ax_barplot, axes='x')
+
+        ax_lineplot.set_title(facet_label, fontsize=8)
+
+        ax_lineplot.grid(linewidth=0.5, color='grey', alpha=0.4)
+        ax_lineplot.tick_params(axis='x', labelsize=6)
+        _x_labels = ds_any[x_dim].values
+        if _x_labels.dtype.kind in ['O', 'U', 'S']:
+            ax_lineplot.xaxis.set_major_formatter(lambda tl, pos: _x_labels[tl][0])
+        elif _x_labels.dtype == int:
+            pass
+
+        for i, ax_barplot in enumerate(axs_barplot):
+            ax_barplot.grid(axis='x', linewidth=0.5, color='grey', alpha=0.4)
+            ax_barplot.tick_params(axis='x', labelsize=6)
+            ax_barplot.tick_params(axis='y', labelsize=6)
+            if col == 0:
+                ax_barplot.set_ylabel('profiles', fontsize=8)
+            ax_barplot.set(ylim=(0, flight_max))
+
+        for i, multiline_coord in enumerate(ds_any[multiline_dim]):
+            multiline_coord = multiline_coord.item()
+            for j, (specie, _ds) in enumerate(ds_by_specie.items()):
+                ds_singleline = _ds.sel({multiline_dim: multiline_coord, facet_dim: facet_label})
+                c = ds_singleline['color'].item()
+                lm = ds_singleline['linemarker'].item()
+
+                if j == 1:
+                    ax_lineplot = ax_lineplot.twinx()
+                if j == 0 and col == 0 or j == 1 and col == len(ds_any[facet_dim]) - 1:
+                    ax_lineplot.set_ylabel(specie, color=c, fontsize=8)
+                ax_lineplot.tick_params(axis='y', labelsize=6, labelcolor=c)
+                ax_lineplot.set(ylim=v_range_by_specie[specie][col])
+
+                _line, = ax_lineplot.plot(
+                    ds_singleline[x_dim],
+                    ds_singleline[f'{specie}_{main_stat}'],
+                    color=c,
+                    marker=lm,
+                    linewidth=primary_linewidth,
+                )
+                if col == 0:
+                    legend_items_by_specie[specie] = _line
+                if aux_stats:
+                    ls = ds_singleline['aux_stat_linestyle'].item()
+                    for stat in aux_stats:
+                        ax_lineplot.plot(
+                            ds_singleline[x_dim],
+                            ds_singleline[f'{specie}_{stat}'],
+                            color=c,
+                            linestyle=ls,
+                            linewidth=secondary_linewidth,
+                        )
+
+                axs_barplot[i].bar(
+                    x=ds_singleline[x_dim],
+                    height=ds_singleline[f'{specie}_flights'],
+                    color=c,
+                    alpha=0.5,
+                )
+
+    fig.legend(
+        list(legend_items_by_specie.values()),
+        list(legend_items_by_specie.keys()),
+        loc='lower center',
+        fontsize=8,
+        alignment='left',
+        ncols=len(legend_items_by_specie)
+    )
     return fig
 
 
