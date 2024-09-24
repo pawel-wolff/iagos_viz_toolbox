@@ -710,7 +710,7 @@ def get_lon_lat_plots(
     if extent == 'auto':
         extent = _extent
 
-    nrows, ncols = get_nrows_ncols(da[_facet_dim], nrows, ncols, orient)
+    nrows, ncols = get_nrows_ncols(_da[_facet_dim], nrows, ncols, orient)
 
     # init fig and axes
     fig, axs = plt.subplots(
