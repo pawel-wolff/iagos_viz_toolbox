@@ -17,12 +17,11 @@ import cartopy.crs as ccrs
 from shapely.geometry.linestring import LineString
 
 import fpout
-from common import longitude
-from iagos_viz import toar_viz
+from iagos_viz import toar_viz, utils
 
 
 def releases_trajectory(ds):
-    lons = longitude.geodesic_longitude_midpoint(
+    lons = utils.geodesic_longitude_midpoint(
         ds['release_lon'].isel({'pointspec': slice(0, -1)}).values,
         ds['release_lon'].isel({'pointspec': slice(1, None)}).values
     )

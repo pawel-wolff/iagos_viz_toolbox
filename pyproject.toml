@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools >= 65.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+authors = [{name = "Pawel Wolff"}]
+name = "iagos_viz_toolbox"
+version = "0.1"
+dependencies = [
+  "matplotlib >= 3.8.0",
+  "cartopy >= 0.22.0",
+  "numpy >= 1.26.0",
+  "pandas >= 2.1.0",
+  "xarray >= 2023.8.0",
+  "scipy >= 1.11.2",
+  "netCDF4 >= 1.6.4",
+  "h5netcdf >= 1.2.0",
+  "dask >= 2023.9.2",
+  "xarray_extras@git+https://github.com/pawel-wolff/xarray_extras.git"
+]
+requires-python = ">= 3.9"
+readme = "README.md"
+
+
+[project.optional-dependencies]
+footprint = [
+  "shapely >= 2.0.1",
+  "flexpart_output@git+https://github.com/pawel-wolff/flexpart_output.git"
+]
